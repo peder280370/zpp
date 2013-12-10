@@ -3,16 +3,16 @@
 Zpp (a.k.a Zoomify++) consists of multiple modules that provide server and client support for the Zoomify image format.
 
 ### Client Module
-The `zpp-viewer` moduels contains a jQuery UI module, ***ZppViewer*** for displaying Zoomify images. Features:
+The `zpp-viewer` module contains a jQuery UI module, ***ZppViewer***, for displaying Zoomify images. Features:
 
-* HTML5 only - it uses canvas for displaying the image.
+* HTML5 only - it uses the canvas element for displaying the image.
 * Proper fullscreen mode on supported platforms.
 * Mouse and gestures (tablet) supported.
 * High DPI (retina-style screens) supported.
 
 The ZppViewer depends on **jQuery**, **jQuery UI** and **Hammer.js**.
 
-Example configuration:
+Example:
 
     <html>
       <head>
@@ -50,16 +50,16 @@ In the root of the `zpp` module, run:
     mvn tomcat7:run
     # Alternatively: mvn jetty:run
 
-Currently, there are only Mac OS X Makefiles. If you use Linux, please add Linux-flavoured Makefiles and update the respective pom.xml files with a "Linux" profile.
+Currently, there are only Mac OS X Makefiles checked in. If you use Linux, please add Linux-flavoured Makefiles and update the respective pom.xml files with a "Linux" profile.
 
 ### Misc Modules
-The `zpp-vips` module contains a C++ application, which is essentially just a thin shell on top of ***libvips***. First of all, it *always* auto-rotates the image, if specified by the exif rotation header, and it allows you to chain certain VIPS operations, e.g.:
+The `zpp-vips` module contains a C++ application, which is essentially just a thin shell on top of ***libvips***. First of all, it *always* auto-rotates the images (according to the exif rotation header), and it allows you to chain certain VIPS operations, e.g.:
 
     zpp_vips image.jpg result.jpg -rotate 17 -resize 500 0 -crop 100 100 50 50
     zpp_vips image.jpg result.tif:jpeg:85,tile:256x256,pyramid -sharpen
     zpp_vips image.jpg result -resize 2000 2000 -zoomify 256
 
-The `testrepo` module, merely serves as an image repository for the `zpp-svr` module. It contains sample images.
+The `testrepo` module merely serves as an image repository for the `zpp-svr` web application. It contains sample images.
 
 
 ## Generating Zoomify Images
@@ -75,4 +75,8 @@ It is highly recommended using ***libvips***. Examples:
          --layout zoomify \
          --tile-size 256 \
          --suffix .jpg[Q=85]
-    
+
+## About pyramid tiff support
+A Zoomify file bundle may contain hundreds, or even thousands, of tiles for large images. It is much nicer to keep the original image as a single tiled pyramid tiff. Using the `zpp-nativelib` interface to support the Zoomify protocol directly from the pyramid tiff, as exemplified by the `zpp-svr` web application, is almost as fast as seving the data from a Zoomify file bundle.
+
+
