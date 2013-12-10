@@ -5,20 +5,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.servlet.AsyncContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
 import dk.carolus.zpp.nativelib.ZppImage;
 import dk.carolus.zpp.svr.ZppPath.PartType;
 
 /**
- * Servlets that fetches Zoomify image parts defined by the request path info.
+ * Servlets that fetches Zoomify image parts defined by the request path info.<br/>
+ * The requests are processed asynchronously via a thread pool, to constrain the 
+ * maximal load on the system.
  * <p>
  * The format of the path info should resemble these examples:
  * <ul>
@@ -40,7 +49,36 @@ public class ZppServlet extends HttpServlet {
 	static final long TTL_SECONDS = 24 * 60 * 60; // One day
 		
 	static final Logger log = Logger.getLogger(ZppServlet.class.getName());
+	
+	// Process pool
+	static final int PROCESS_POOL_SIZE = 50;
+	private ExecutorService processPool;
+	
+	// Cache
+	static final String IMAGE_CACHE_NAME = "ImageCache";
+	private Cache imageCache;
     
+	/**
+	 * Called when the servlet is initialized
+	 */
+	@Override 
+	public void init() {
+		processPool = Executors.newFixedThreadPool(PROCESS_POOL_SIZE);
+		log.info("Created processor pool with " + PROCESS_POOL_SIZE + " threads");
+		
+		imageCache = CacheManager.getInstance().getCache("ImageCache");
+		log.info("Instantiated image cache " + imageCache.getCacheConfiguration());
+	}
+
+	/**
+	 * Called when the servlet is destroyed
+	 */
+	@Override 
+	public void destroy() {
+		processPool.shutdown();
+		CacheManager.getInstance().shutdown();
+	}
+
 	/**
 	 * Main GET method
 	 * @param request servlet request
@@ -49,6 +87,19 @@ public class ZppServlet extends HttpServlet {
 	 */
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+		// Execute the request asynchronously
+		processPool.execute(new AsyncRequestProcessor(request.startAsync(), request.getPathInfo()));
+	}
+	
+	/**
+	 * Asynchronous implementation of the GET method
+	 * @param request servlet request
+	 * @param response servlet response
+	 * @throws IOException 
+	 */
+	protected void asyncDoGet(HttpServletRequest request, HttpServletResponse response, String pathInfo) throws IOException, ServletException {
+		
+		long t0 = System.currentTimeMillis();
 		
 		/**
 		 * The path info will point out the Zoomify path to fetch.
@@ -56,7 +107,6 @@ public class ZppServlet extends HttpServlet {
 		 *   /path/to/image.tif/ImageProperties.xml
 		 *   /path/to/image.tif/TileGroup0/0-0-0.jpg
 		 */
-		String pathInfo = request.getPathInfo();
 		Path repoRoot = Repositories.getRepoRoot();
 		try {
 			// Extract the desired image file and Zoomify path
@@ -66,19 +116,40 @@ public class ZppServlet extends HttpServlet {
 			
 			// Check whether to use the cached version or not
 			// Also, sets the caching response headers.
-			if (checkUseCachedVersion(request, response, zppPath)) {
+			if (checkUseClientCachedVersion(request, response, zppPath)) {
 				return;
 			}
 			
-			// Send the Zoomify part back in the response 
-			response.setContentType(zppPath.getContentType());
-			if (zppPath.getZoomifyType() == ZppPath.ZoomifyType.PTIFF) {
-				sendPTiffResponse(zppPath, response);
-			} else {
-				sendFileBundleResponse(zppPath, response);
+			// Check if the part is cached in the imageCache
+			String returnedFileType = "cached data";
+			byte[] data = getServerCachedVersion(zppPath);
+			
+			// If not cached, fetch it
+			if (data == null) {
+				// Send the Zoomify part back in the response 
+				response.setContentType(zppPath.getContentType());
+				if (zppPath.getZoomifyType() == ZppPath.ZoomifyType.PTIFF) {
+					returnedFileType = "ptiff data";
+					data = readPTiffPart(zppPath);
+				} else {
+					returnedFileType = "Zoomify file bundle data";
+					data = readFileBundleResponse(zppPath);
+				}
+				cacheOnServer(zppPath, data);
 			}
 			
+			// Update the response
+			response.setContentLength(data.length); // Pre-requisite for keep-alive
+			response.setContentType(zppPath.getContentType());
+			response.getOutputStream().write(data);
 			response.flushBuffer();
+			
+			log.log(Level.INFO, 
+					String.format("Returning %s: %s -> %S in %d ms",
+							returnedFileType, 
+							zppPath.getFile(),
+							zppPath.getPart(),
+							System.currentTimeMillis() - t0));
 			
 		} catch (Exception ex) {
 			log.log(Level.SEVERE, "Error serving the requested file: " + ex);
@@ -90,7 +161,8 @@ public class ZppServlet extends HttpServlet {
 
 	
 	/**
-	 * Checks the various request headers to see if the cached response should be used.
+	 * Checks the various request headers to see if the client browser's 
+	 * cached response should be used.<br/>
 	 * Sets the cache header according to the parameters.
 	 * <p>
 	 * A combination of last modification time and file length
@@ -101,7 +173,7 @@ public class ZppServlet extends HttpServlet {
 	 * @param zppPath the Zoomify part to check caching for
 	 * @return if the cached version was used
 	 */
-	boolean checkUseCachedVersion(HttpServletRequest request, HttpServletResponse response, ZppPath zppPath) {
+	boolean checkUseClientCachedVersion(HttpServletRequest request, HttpServletResponse response, ZppPath zppPath) {
 		// Set response headers 
 		Date now = Calendar.getInstance().getTime();
 		response.setDateHeader("Last-Modified", zppPath.getLastModifiedTime());
@@ -130,36 +202,46 @@ public class ZppServlet extends HttpServlet {
 	}	
 	
 	/**
-	 * Send the requested Zoomify image part back to the response.
+	 * Checks if the given Zoomify image part is cached in the {@code imageCache}.
+	 * Returns the cached version, or null, if it is not cached.
+	 * 
+	 * @param zppPath the Zoomify image part
+	 * @return the cached byte data
+	 */
+	byte[] getServerCachedVersion(ZppPath zppPath) {
+		Element e = imageCache.get(zppPath.getCacheKey());
+		return (e == null) ? null : (byte[])e.getObjectValue();
+	}
+	
+	/**
+	 * Caches the given data in the {@code imageCache}.
+	 * 
+	 * @param zppPath the Zoomify image part
+	 * @param data the byte data to cache
+	 */
+	void cacheOnServer(ZppPath zppPath, byte[] data) {
+		imageCache.put(new Element(zppPath.getCacheKey(), data));
+	}
+	
+	/**
+	 * Reads and returns the requested Zoomify image part.
 	 * <p>
 	 * The part is extracted from a tiled pyramid tiff.
 	 * 
-	 * @param repository the current repository
 	 * @param zppPath the Zoomify image part
-	 * @param response the HTTP response
+	 * @return the byte data
 	 */
-	void sendPTiffResponse(ZppPath zppPath, HttpServletResponse response) throws Exception {
+	byte[] readPTiffPart(ZppPath zppPath) throws Exception {
 		
-		long t0 = System.currentTimeMillis();
-				
-		ZppImage image = null;
+		ZppImage image 	= null;		
 		try {
 			image = new ZppImage(zppPath.getFile().toString());
 			
 			if (zppPath.getPartType() == PartType.IMAGE_TILE) {
-				byte[] data = image.getTile(85, zppPath.getPart());
-				response.setContentLength(data.length); // Pre-requisite for keep-alive
-				response.getOutputStream().write(data);
+				return image.getTile(85, zppPath.getPart());
 			} else {
-				String data = image.getImageProperties();
-				response.getWriter().write(data);
+				return image.getImageProperties().getBytes("UTF-8");
 			}
-			
-			log.log(Level.INFO, 
-					String.format("Generated file %s -> %S in %d ms", 
-							zppPath.getFile(),
-							zppPath.getPart(),
-							System.currentTimeMillis() - t0));
 			
 		} finally {
 			if (image != null) {
@@ -169,26 +251,53 @@ public class ZppServlet extends HttpServlet {
 	}
 
 	/**
-	 * Send the requested Zoomify image part back to the response
+	 * Reads and returns the requested Zoomify image part.
 	 * <p>
 	 * The part is assumed to be a file within a Zoomify file bundle.
 	 * 
-	 * @param repository the current repository
 	 * @param zppPath the Zoomify image part
-	 * @param response the HTTP response
+	 * @return the byte data
 	 */
-	void sendFileBundleResponse(ZppPath zppPath, HttpServletResponse response) throws Exception {
-		
-		long t0 = System.currentTimeMillis();
-		
-		response.setContentLength((int)zppPath.getSize()); // Pre-requisite for keep-alive
-		Files.copy(zppPath.getFile(), response.getOutputStream());
-		
-		log.log(Level.INFO, 
-				String.format("Generated file %s in %d ms", 
-						zppPath.getFile(), 
-						System.currentTimeMillis() - t0));
+	byte[] readFileBundleResponse(ZppPath zppPath) throws Exception {		
+		return Files.readAllBytes(zppPath.getFile());
 	}
 
+	
+	/**
+	 * Helper class that instigates the asynchronous processing
+	 * of the request.
+	 */
+	class AsyncRequestProcessor implements Runnable {
+		
+		AsyncContext asyncContext;
+		String pathInfo;
+		
+		/**
+		 * Constructor
+		 * @param asyncContext
+		 */
+		AsyncRequestProcessor(AsyncContext asyncContext, String pathInfo) {
+			this.asyncContext = asyncContext;
+			this.pathInfo = pathInfo;
+		}
+		
+		/**
+		 * Called when the request is ready to be processed
+		 */
+		@Override
+		public void run() {
+			try {
+				asyncDoGet(
+						(HttpServletRequest)asyncContext.getRequest(), 
+						(HttpServletResponse)asyncContext.getResponse(),
+						pathInfo);
+				
+			} catch (IOException | ServletException e) {
+				// Already handled
+			} finally {
+				asyncContext.complete();
+			}
+		}
+	}
 }
 

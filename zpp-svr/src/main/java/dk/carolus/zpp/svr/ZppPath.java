@@ -56,6 +56,7 @@ public class ZppPath {
 	ZoomifyType zoomifyType;
 	PartType partType;
 	String part;
+	String cacheKey;
 	Path zoomifyImage;
 	Path file;
 	BasicFileAttributes attrs;
@@ -75,6 +76,7 @@ public class ZppPath {
 	public static ZppPath resolveZoomifyPath(Path repoRoot, String path) throws Exception {
 		
 		ZppPath zppPath = new ZppPath();
+		zppPath.cacheKey = path;
 		
 		// Parse the path
 		Matcher m = PartType.IMAGE_PROPERTIES.getPattern().matcher(path);
@@ -161,6 +163,10 @@ public class ZppPath {
 	}
 	
 	public String getContentType() {
-		return (partType == PartType.IMAGE_PROPERTIES) ? "text/xml" : "image/jpeg";
+		return (partType == PartType.IMAGE_PROPERTIES) ? "text/xml; charset=UTF-8" : "image/jpeg";
+	}
+
+	public String getCacheKey() {
+		return cacheKey;
 	}
 }
