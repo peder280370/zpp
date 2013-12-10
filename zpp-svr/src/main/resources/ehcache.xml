@@ -1,0 +1,17 @@
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://ehcache.org/ehcache.xsd"
+         updateCheck="false"
+         dynamicConfig="false">
+         
+    <diskStore path="java.io.tmpdir"/>
+    
+    <cache name="ImageCache"
+           maxEntriesLocalHeap="100000"
+           maxEntriesLocalDisk="10000"
+           eternal="false"
+           overflowToDisk="true"
+           timeToIdleSeconds="3000"
+           timeToLiveSeconds="6000"
+           memoryStoreEvictionPolicy="LFU"
+            />
+</ehcache>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+    <META HTTP-EQUIV="Expires" CONTENT="-1">
+    <title>Zpp Tests</title>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+    <script src="js/jquery.hammer.min.js"></script>
+    <link href="zpp/zppviewer.css" rel="stylesheet" />
+    <script src="zpp/zppviewer.min.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+      $(document).ready(function() {
+    	    $("canvas").ZppViewer({ debug: false, autoRatio: true, thumbnail: true })
+    	               .css({ border:"1px solid black", margin: "10px" });
+      });
+    </script>
+  </head>
+  <body style="text-align: center;">
+    <h1>Zpp tests</h1>
+
+    <h3>Zpp ptiff test 1</h3>
+    <div>Image generated using vips:<br/> <code>vips im_vips2tiff image.jpg zpp_image1.tif:jpeg:85,tile:256x256,pyramid</code></div>    
+	  <div>
+	    <canvas id="img1" tabindex="1" width="300" height="200" zpp-debug="true" zpp-src="zpprepo/zpp_image1.tif" ></canvas>
+	  </div>
+			
+    <h3>Zpp ptiff test 2</h3>
+    <div>Image generated using vips:<br/> <code>vips im_vips2tiff image.jpg zpp_image2.tif:deflate,tile:256x256,pyramid</code></div>    
+    <div>
+      <canvas id="img2" tabindex="2" width="300" height="200" zpp-debug="true" zpp-src="zpprepo/zpp_image2.tif" ></canvas>
+    </div>
+      
+    <h3>Zpp ptiff test 3</h3>
+    <div>Image generated using ImageMagick:<br/> <code>convert image.jpg -define tiff:tile-geometry=256x256 -compress jpeg 'ptif:zpp_image2.tif'</code></div>    
+    <div>
+      <canvas id="img3" tabindex="3" width="300" height="200" zpp-debug="true" zpp-src="zpprepo/zpp_image3.tif" ></canvas>
+    </div>
+      
+    <h3>Zpp Zoomify file bundle test</h3>
+    <div>File bundle generated using vips:<br/> <code>vips dzsave image.jpg zpp_image4 --layout zoomify --tile-size 256 --suffix .jpg[Q=85]</code></div>    
+	  <div>
+	    <canvas id="img4" tabindex="4" width="300" height="200" zpp-debug="true" zpp-src="zpprepo/zpp_image4" ></canvas>
+	  </div>
+		
+    <h3>External Zoomify image test</h3>
+    <div>Avoid Ajax security errors while fetching <i>ImageProperties.xml</i> from an external site<br/>
+       by instead specifying the <i>zpp-imageWidth</i>, <i>zpp-imageHeight</i> and <i>zpp-tileSize</i> attributes.</div>
+    <div>
+      <canvas id="img5" tabindex="5" width="300" height="200" 
+              zpp-background="#faf5d8" zpp-imageWidth="21250" zpp-imageHeight="7500" zpp-tileSize="256" 
+              zpp-src="http://www.britishpanoramics.com/ZoomifyImage02" ></canvas>
+    </div>               
+  </body>
+</html>

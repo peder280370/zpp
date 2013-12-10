@@ -1,0 +1,46 @@
+
+/**
+ * Hack-alert: The purpose of the "background-image" attribute is to make the css
+ * url available to javascript. I has no other purpose, since the entire canvas is
+ * painted programmatically...
+ */
+.zppviewer {
+  background: transparent;
+  background-image:url("empty.png");
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: none;
+  -webkit-tap-highlight-color: rgba(0,0,0,0); /* Disable tap highlighting */
+}
+
+.zppviewer:focus, .zppviewer:active {
+  outline: none;
+}
+
+/* Fullscreen pseudo-classes */
+.zppFullScreen:-full-screen {
+  background: black;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+}
+.zppFullScreen:-moz-full-screen {
+  background: black;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+}
+.zppFullScreen:-webkit-full-screen {
+  background: black;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+}
+

@@ -1,0 +1,22 @@
+SOURCES     = src/main/cpp/ZppImage.cc src/main/cpp/zppwrap.cc
+OBJECTS     = $(SOURCES:.cc=.o)
+TARGETDIR   = target/classes/dk/carolus/zpp/nativelib
+NATIVELIB   = $(TARGETDIR)/libzpp-native.dylib
+
+all: setup $(SOURCES) $(NATIVELIB) clean
+
+setup:
+	mkdir -p $(TARGETDIR)
+
+$(NATIVELIB): $(OBJECTS)
+	g++  -dynamiclib $(OBJECTS) -o $@ \
+	-framework JavaVM \
+	-ltiff -ljpeg
+
+.cc.o:
+	g++ -c -Wall \
+	-I/System/Library/Frameworks/JavaVM.framework/Headers \
+	$< -o $@
+
+clean:
+	rm $(OBJECTS)

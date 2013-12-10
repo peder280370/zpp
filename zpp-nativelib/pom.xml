@@ -1,0 +1,98 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dk.carolus.zpp</groupId>
+    <artifactId>zpp-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>zpp-nativelib</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Zpp Native Lib</name>
+  <description>
+    Zpp Native Lib provides a java interface to libtiff
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.10</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <profiles>
+    <profile>
+      <id>macosx</id>
+      <activation>
+        <os><name>mac os x</name></os>
+      </activation>
+      <properties>
+        <make.file>Makefile-macosx</make.file>
+      </properties>
+    </profile>
+  </profiles>
+  
+  <build>
+    <defaultGoal>clean package</defaultGoal>
+    <plugins>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>1.7</version>
+        <executions>
+          <execution>
+            <!--phase>process-classes</phase-->
+            <phase>compile</phase>
+            <goals>
+                <goal>run</goal>
+            </goals>
+            <configuration>
+                <exportAntProperties>true</exportAntProperties>
+                <target>
+                   <property name="runtime_classpath" refid="maven.compile.classpath"/>
+                   <exec executable="javah">
+                       <arg value="-cp"/>
+                       <arg value="${runtime_classpath}"/>
+                       <arg value="-d"/>
+                       <arg value="src/main/cpp"/>
+                       <arg value="dk.carolus.zpp.nativelib.ZppImage"/>
+                   </exec>
+                </target>
+              </configuration>
+           </execution>
+        </executions>
+      </plugin>
+    
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.2.1</version>
+        <executions>
+          <execution>
+            <id>build-zpp-nativelib</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>make</executable>
+              <workingDirectory>${basedir}</workingDirectory>
+              <arguments>
+                <argument>-f</argument>
+                <argument>${make.file}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      
+    </plugins>
+    
+  </build>
+  
+</project>

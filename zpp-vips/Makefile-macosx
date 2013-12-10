@@ -1,0 +1,36 @@
+# Set up basic variables:
+CC         = g++
+CFLAGS     = -c -Wall
+LDFLAGS    =
+
+# List of sources:
+SOURCES    = src/main/cpp/zpp_vips.cc
+OBJECTS    = $(SOURCES:.cc=.o)
+
+# Name of executable target:
+EXECUTABLE = zpp_vips
+
+CFLAGS     += `pkg-config vipsCC --cflags`
+LDFLAGS    += `pkg-config vipsCC --libs`
+
+# Installation
+PREFIX     = $(DESTDIR)/usr/local
+BINDIR     = $(PREFIX)/bin
+
+all: $(SOURCES) $(EXECUTABLE)
+
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
+
+.cc.o:
+	$(CC) $(CFLAGS) $< -o $@
+
+install: all
+	install $(EXECUTABLE) $(BINDIR)/$(EXECUTABLE)
+
+uninstall:
+	rm $(BINDIR)/$(EXECUTABLE)
+ 
+clean:
+	rm $(OBJECTS) $(EXECUTABLE)
+
